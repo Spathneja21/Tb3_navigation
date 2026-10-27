@@ -1,14 +1,14 @@
 """Start Gazebo (Classic, via gazebo_ros) and spawn the TurtleBot3 into it.
 
-The robot's URDF is published by robot_state_publisher (for TF) and spawned into Gazebo
-from the /robot_description topic. gui:=false runs gzserver only (no gzclient window),
+The robot's URDF is published by robot_state_publisher (for TF); the robot itself is spawned
+into Gazebo from turtlebot3_gazebo's model.sdf, which has the sensor and drive plugins. gui:=false runs gzserver only (no gzclient window),
 which is much lighter under software rendering; use RViz to watch instead.
 """
 import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -16,6 +16,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     model = os.environ.get('TURTLEBOT3_MODEL', 'burger')
+    tb3_gazebo_share = get_package_share_directory('turtlebot3_gazebo')
     urdf_path = os.path.join(
         get_package_share_directory('turtlebot3_description'), 'urdf', f'turtlebot3_{model}.urdf')
     with open(urdf_path, 'r') as f:
@@ -24,6 +25,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('gui', default_value='true',
                               description='false = gzserver only, no gzclient window'),
+        SetEnvironmentVariable('GAZEBO_MODEL_PATH', os.path.join(tb3_gazebo_share, 'models')),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')),
@@ -37,7 +39,8 @@ def generate_launch_description():
         Node(
             package='gazebo_ros',
             executable='spawn_entity.py',
-            arguments=['-entity', 'turtlebot3', '-topic', 'robot_description',
+            arguments=['-entity', 'turtlebot3', '-file',
+                       os.path.join(tb3_gazebo_share, 'models', f'turtlebot3_{model}', 'model.sdf'),
                        '-x', '0.0', '-y', '0.0', '-z', '0.01'],
             output='screen',
         ),

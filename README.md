@@ -157,7 +157,9 @@ In RViz: **Add → RobotModel** and set its **Description Topic** to `/robot_des
 ## Gazebo: spawn the robot
 
 `launch/gazebo.launch.py` starts Gazebo Classic with an empty world, publishes the robot's TF
-and spawns the TurtleBot3 at the origin. Stop the `rsp.launch.py` shell first: it publishes
+(from the URDF) and spawns the TurtleBot3 at the origin from `turtlebot3_gazebo`'s `model.sdf`.
+The SDF is what carries the plugins that publish `/odom` and `/scan` and drive the wheels; the
+URDF has none of them. Stop the `rsp.launch.py` shell first: it publishes
 the same robot, and only one of the two should run.
 
 ```bash

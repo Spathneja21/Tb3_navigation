@@ -126,3 +126,19 @@ Second layer of the bring-up: put the robot into a running Gazebo.
 - The robot is spawned from the same URDF `rsp.launch.py` reads (through the
   `/robot_description` topic that `robot_state_publisher` publishes).
 - Run: `ros2 launch tb3_bot gazebo.launch.py` (or `gui:=false`), after a rebuild.
+
+### Mistake: spawned the URDF, so there was no `/odom` and no `/scan`
+
+- Symptom: Gazebo ran (`/clock` and `/performance_metrics` were published, which only a running
+  `gzserver` does), but `ros2 topic list` showed no `/scan` and no `/odom`, and
+  `ros2 topic echo /scan --once` said `topic does not appear to be published yet`.
+- In Gazebo Classic, those topics come from plugins loaded with the robot model:
+  `libgazebo_ros_diff_drive.so` (`/odom`, `/cmd_vel`, TF), `libgazebo_ros_ray_sensor.so`
+  (`/scan`), the IMU plugin and the joint-state plugin.
+- `grep` on the Burger's `turtlebot3_gazebo/models/turtlebot3_burger/model.sdf` found exactly
+  those four plugins. The URDF's plugin count was not checked this time (for the Waffle's URDF
+  it was 0); the fix below is what confirms it.
+- Fix: spawn the robot from `model.sdf` (`spawn_entity.py -file`), and keep the URDF only for
+  `robot_state_publisher`. The ROBOTIS launch files do the same.
+- Added with the fix: `GAZEBO_MODEL_PATH` set to `turtlebot3_gazebo/models`, because the SDF loads
+  its meshes from `model://turtlebot3_common/...`.
