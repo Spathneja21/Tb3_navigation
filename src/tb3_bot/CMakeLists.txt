@@ -22,7 +22,7 @@ add_executable(scan_filler src/scan_filler.cpp)
 ament_target_dependencies(scan_filler rclcpp sensor_msgs)
 install(TARGETS scan_filler DESTINATION lib/${PROJECT_NAME})
 
-# launch files and configs are installed copies: rebuild after editing them
-install(DIRECTORY launch config models DESTINATION share/${PROJECT_NAME})
+# launch files, configs and maps are installed copies: rebuild after editing them
+install(DIRECTORY launch config models maps DESTINATION share/${PROJECT_NAME})
 
 ament_package()

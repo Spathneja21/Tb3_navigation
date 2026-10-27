@@ -265,3 +265,35 @@ This writes `maps/sc7a_map.pgm` (the image) and `maps/sc7a_map.yaml` (resolution
 Navigation later uses AMCL on the saved map, which corrects the robot's pose from the lidar, so
 the navigation pose doesn't inherit any odometry drift from mapping. `config/nav2_params.yaml`
 holds the Nav2 and AMCL settings, used in the Nav2 step.
+
+## Navigation with Nav2
+
+Nav2 drives the robot to a goal on the saved map. **AMCL** works out where the robot is on that
+map from the lidar, and the planner and controller use the costmaps built from the same map and
+the live scan. The stock `nav2_bringup` launch starts all of it, with our parameter file
+`config/nav2_params.yaml` (Burger footprint, `base_footprint` frames, `/scan` and `/odom`).
+
+`maps/` has to be installed like the launch files and configs, so the build rule includes it
+(`install(DIRECTORY launch config models maps ...)`). Rebuild once:
+```bash
+cd /ros2_ws
+colcon build --packages-select tb3_bot
+```
+
+Stop the mapping terminals first (SLAM, `scan_filler`, the explorer). `slam_toolbox` and AMCL
+both publish the `map` → `odom` transform and both would publish `/map`, so they must not run
+together. Restart Gazebo as well, because AMCL's initial pose in `nav2_params.yaml` is the origin
+(0, 0, yaw 0) and the robot has to be there. Each terminal sources both setup files, as above.
+
+| Terminal | Command |
+|---|---|
+| 1. Simulation | `ros2 launch tb3_bot gazebo.launch.py gui:=false` |
+| 2. Nav2 | `ros2 launch nav2_bringup bringup_launch.py use_sim_time:=true map:=/ros2_ws/install/tb3_bot/share/tb3_bot/maps/sc7a_map.yaml params_file:=/ros2_ws/src/tb3_bot/config/nav2_params.yaml` |
+| 3. RViz | `rviz2` |
+
+In RViz: Fixed Frame `map`; **Map** on `/map` (Transient Local); **LaserScan** on `/scan` with
+Reliability **Best Effort**; **Map** displays on `/global_costmap/costmap` and
+`/local_costmap/costmap` to see the inflated obstacles; **Path** on `/plan`. Wait for the Nav2
+log to say `Managed nodes are active`, then check that the scan lines up with the walls of the
+map. If it doesn't, set the pose by hand with the **2D Pose Estimate** tool. Send a goal with
+the **Nav2 Goal** tool (or **2D Goal Pose**) in a clear area of the map.
