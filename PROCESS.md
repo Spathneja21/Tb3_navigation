@@ -311,3 +311,81 @@ The range is a property of the robot, not the world: it's in the Burger's own mo
 sensor. What the running simulation reports on `/scan` matches: 360 samples, `range_max` 3.5 m, 5 Hz.
 Raising it would mean editing a copy of that model, which makes the robot something other than the
 stock Burger, so it is kept as a later option.
+
+## Step 11. Odometry-only mapping (and why AMCL comes next)
+
+With `scan_filler` in place the explorer works: the map is a solid free-space region around the
+robot's path, and the blocks it has passed appear as black outlines. But the map is "glitchy": the
+scan matcher in `slam_toolbox` keeps re-correcting the robot's pose against few features in a big
+open arena, which can shift or bend the map.
+
+- Copied `config/slam_toolbox_odomonly.yaml` from the earlier project. It is `slam_toolbox.yaml`
+  (same frames, `/scan_slam`, 3.0 m range) with exactly two lines changed:
+  `use_scan_matching: false` and `do_loop_closing: false`. The map is then registered purely with the
+  wheel odometry, which Gazebo's diff-drive plugin publishes with no sensor noise. (The
+  "TEST ONLY" comments from the original were reworded, since this is now a deliberate choice.)
+- Run it by pointing the same SLAM command at this file:
+  `ros2 run slam_toolbox async_slam_toolbox_node --ros-args --params-file /ros2_ws/src/tb3_bot/config/slam_toolbox_odomonly.yaml`
+- Limits: odometry-only maps can blur slowly over a long run (wheel slip and heading drift add up, and
+  nothing corrects them). In Gazebo the odometry is far better than on a real robot, so this is
+  expected to be acceptable here, but it has not been checked on this arena yet.
+- Why AMCL: the saved map may carry a small error from odometry. For navigation, Nav2 runs AMCL on the
+  saved map, which localizes the robot against the lidar, so the navigation pose does not inherit the
+  mapping drift. AMCL is configured in `nav2_params.yaml` (already in the package) and is started with
+  Nav2 later.
+
+### Result: odometry-only mapping works
+
+- After restarting `slam_toolbox` with `slam_toolbox_odomonly.yaml`, the map no longer shifts or bends
+  (reported as working fine; the explorer maps the arena and the blocks it passes appear as black
+  outlines). Before this, with scan matching on, the map was glitchy.
+- How the change was made: no code and no rebuild. It was a different parameter file passed to the
+  same node, `--params-file .../slam_toolbox_odomonly.yaml` in place of `.../slam_toolbox.yaml`. The
+  two files differ in two lines only:
+
+  ```
+  use_scan_matching: true   ->  false
+  do_loop_closing:   true   ->  false
+  ```
+  (Everything else is identical: frames `odom`/`map`/`base_footprint`, `scan_topic: /scan_slam`,
+  `max_laser_range: 3.0`, `use_sim_time: true`, mapping mode.)
+- Why those two lines matter, as I understand `slam_toolbox`: with `use_scan_matching: true` it
+  aligns every new scan against recent ones and corrects the robot's pose estimate from the match.
+  In this arena most beams hit nothing within 3.5 m, so a scan has few features and the best match
+  can be wrong; the pose then jumps and the map shifts. With it `false`, each scan is placed at the
+  pose the odometry reports, which in Gazebo's diff-drive plugin has no sensor noise.
+  `do_loop_closing` only makes sense with matched scans (it detects revisits by matching), so it is
+  switched off with it.
+- Trade-off: nothing corrects wheel slip or heading drift while mapping, so a long run could
+  blur the map slowly. Nothing was measured here beyond the map looking consistent. AMCL (in Nav2,
+  `nav2_params.yaml`) will localize on the saved map during navigation.
+- README: the "Mapping the arena" section is now the full working sequence in one table (simulation,
+  `scan_filler`, SLAM with the odometry-only config, explorer with `lidar_explorer.yaml`, RViz), with what
+  each piece is for. The teleop instructions were removed, since the explorer drives the robot.
+
+### Result: the finished map, and what the odometry-only yaml changed
+
+![Map after one autonomous run](src/tb3_bot/models/autonomous_map_formation.png)
+
+- The picture is the map after one autonomous run (RViz screenshot, saved as
+  `src/tb3_bot/models/autonomous_map_formation.png`). The pink line is `/explorer_path`. It covers the
+  whole arena, and the blocks are filled rectangles with straight edges.
+- The map was saved with `map_saver_cli -f /ros2_ws/src/tb3_bot/maps/sc7a_map` while `slam_toolbox`
+  was still running, giving `maps/sc7a_map.pgm` and `maps/sc7a_map.yaml`. The command is in the README.
+- What `slam_toolbox_odomonly.yaml` changed compared with `slam_toolbox.yaml`, by key:
+
+  | Key | `slam_toolbox.yaml` | `slam_toolbox_odomonly.yaml` |
+  |---|---|---|
+  | `use_scan_matching` | `true` | `false` |
+  | `do_loop_closing` | `true` | `false` |
+
+  Nothing else differs, so the improvement comes from these two lines only. With matching on, a wrong
+  scan match (few features within 3.5 m) moved the pose and shifted the map. With it off, scans go at
+  the odometry pose, which is noise-free in Gazebo, so the map stays consistent. This is my
+  understanding of the mechanism. What I observed is that the glitchy map became stable after the
+  swap.
+- Not measured: how far the odometry-only map is from the true world. A check would be to compare
+  block positions in the saved map with the block positions in the SDF. Drift on a longer run is
+  also unchecked.
+- README: added a "Why the odometry-only config gives a better map" subsection (the two-line table and
+  the reasoning), the result image, and the save command.

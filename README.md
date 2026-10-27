@@ -161,7 +161,7 @@ RViz) can find them.
 
 ## Gazebo: spawn the robot
 
-`launch/gazebo.launch.py` starts Gazebo Classic with an empty world, publishes the robot's TF
+`launch/gazebo.launch.py` starts Gazebo Classic with the SC7a world, publishes the robot's TF
 (from the URDF) and spawns the TurtleBot3 at the origin from `turtlebot3_gazebo`'s `model.sdf`.
 The SDF is what carries the plugins that publish `/odom` and `/scan` and drive the wheels; the
 URDF has none of them. Stop the `rsp.launch.py` shell first: it publishes
@@ -183,34 +183,85 @@ ros2 topic list
 ros2 node list
 ```
 
-### Watch it in the Gazebo window, and drive it
+### Watch it in the Gazebo window
 
 With the window on (`gui:=true`, the default) you see the arena and the robot at its origin:
 ```bash
 ros2 launch tb3_bot gazebo.launch.py gui:=true
 ```
 `LIBGL_ALWAYS_SOFTWARE=1` means Gazebo renders on the CPU, so the window can take a minute
-to appear and then runs slowly. Give it time before concluding it is stuck.
+to appear and then runs slowly. Give it time before concluding it is stuck. The robot is driven
+by `lidar_explorer` (below), not by hand.
 
-To check the robot responds, drive it from a second shell (both setup files sourced):
+## Mapping the arena
+
+The robot explores the arena on its own while `slam_toolbox` builds the map. Four terminals
+(`docker exec -it tb3assign bash` for each extra one), each starting with:
 ```bash
-ros2 run teleop_twist_keyboard teleop_twist_keyboard
+source /opt/ros/humble/setup.bash
+source /ros2_ws/install/setup.bash
 ```
-Click that terminal and use `i` (forward), `j`/`l` (turn), `k` (stop). The robot should move in
-the Gazebo window, and the wheel-odometry topic should change:
+After building once (`cd /ros2_ws && colcon build --packages-select tb3_bot`):
+
+| Terminal | Command |
+|---|---|
+| 1. Simulation | `ros2 launch tb3_bot gazebo.launch.py gui:=false` |
+| 2. Fill the scan | `ros2 run tb3_bot scan_filler` |
+| 3. SLAM | `ros2 run slam_toolbox async_slam_toolbox_node --ros-args --params-file /ros2_ws/src/tb3_bot/config/slam_toolbox_odomonly.yaml` |
+| 4. Explorer | `ros2 run tb3_bot lidar_explorer --ros-args --params-file /ros2_ws/src/tb3_bot/config/lidar_explorer.yaml` |
+| 5. RViz (optional) | `rviz2` |
+
+Start them in that order, and restart Gazebo (terminal 1) first if the robot isn't at the origin.
+In RViz: Fixed Frame `map`; a **Map** display on `/map` with Durability Policy **Transient Local**;
+a **Path** display on `/explorer_path` for where the robot has been.
+
+What each piece is for:
+- **`scan_filler`** republishes `/scan` as `/scan_slam`, with the beams that hit nothing (`inf`)
+  set just under the lidar's 3.5 m range. `slam_toolbox` ignores readings at or beyond the range
+  limit, so without this, open space is never marked free and the explorer chases unknown patches
+  beside itself.
+- **`slam_toolbox_odomonly.yaml`** is the SLAM configuration (frames `odom`, `map`, `base_footprint`,
+  scan topic `/scan_slam`, range 3.0 m) with scan matching and loop closure **off**, so the map is
+  built from the wheel odometry. In this arena (30 × 30 m, a 3.5 m lidar, blocks 3–4 m apart) there
+  are few features in range, and with matching on the map shifted and bent. Gazebo's odometry has
+  no noise, so the odometry-only map stays consistent, though it can drift slowly over a long run.
+  `slam_toolbox.yaml` is the same file with matching and loop closure on.
+- **`lidar_explorer`** drives to the nearest unexplored frontier on the live map. Its parameters
+  for the Burger (slower, gentler turns, larger minimum frontier size) are in
+  `lidar_explorer.yaml`.
+
+### Why the odometry-only config gives a better map
+
+`slam_toolbox_odomonly.yaml` differs from `slam_toolbox.yaml` in two lines:
+
+| Parameter | `slam_toolbox.yaml` | `slam_toolbox_odomonly.yaml` |
+|---|---|---|
+| `use_scan_matching` | `true` | `false` |
+| `do_loop_closing` | `true` | `false` |
+
+With scan matching on, `slam_toolbox` aligns each new scan with the previous ones and corrects the
+robot's pose from the match. In this arena most beams hit nothing within the lidar's range, so a
+scan has few features and the best match can be wrong. The pose then jumps, and the map shifts and
+bends. With matching off, each scan is placed at the pose the odometry reports. Gazebo's odometry
+has no noise, so the placements agree with each other and the map stays consistent. Loop closing
+detects revisits by matching scans, so it is turned off with matching. The cost is that nothing
+corrects drift during mapping. That isn't measured here, and AMCL corrects the pose during
+navigation.
+
+### Result
+
+![The occupancy map built by the explorer: the 45 blocks as dark rectangles on grey, with the robot's path in pink](src/tb3_bot/models/autonomous_map_formation.png)
+
+*Map after one autonomous run (`src/tb3_bot/models/autonomous_map_formation.png`, RViz): the
+robot's path (pink, from `/explorer_path`) covers the whole arena, and the blocks show up as filled
+rectangles.*
+
+Save it while `slam_toolbox` is still running (the command reads the live `/map` topic):
 ```bash
-ros2 topic echo /odom --once --field pose.pose.position
+ros2 run nav2_map_server map_saver_cli -f /ros2_ws/src/tb3_bot/maps/sc7a_map --ros-args -p save_map_timeout:=10000.0
 ```
+This writes `maps/sc7a_map.pgm` (the image) and `maps/sc7a_map.yaml` (resolution and origin).
 
-## Mapping with slam_toolbox
-
-`config/slam_toolbox.yaml` configures `async_slam_toolbox_node` (mapping mode) for the Burger:
-frames `odom`, `map`, `base_footprint`, scan topic `/scan`. With Gazebo running, start it and the
-explorer in two more shells (both setup files sourced in each):
-```bash
-ros2 run slam_toolbox async_slam_toolbox_node --ros-args --params-file /ros2_ws/src/tb3_bot/config/slam_toolbox.yaml
-ros2 run tb3_bot lidar_explorer --ros-args -p use_sim_time:=true
-```
-In RViz, set the Fixed Frame to `map`, add a **Map** display on `/map` and set its Durability
-Policy to Transient Local. `config/nav2_params.yaml` is for the Nav2 step later.
-
+Navigation later uses AMCL on the saved map, which corrects the robot's pose from the lidar, so
+the navigation pose doesn't inherit any odometry drift from mapping. `config/nav2_params.yaml`
+holds the Nav2 and AMCL settings, used in the Nav2 step.
