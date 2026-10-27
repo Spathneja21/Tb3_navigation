@@ -1,8 +1,10 @@
-"""Start Gazebo (Classic, via gazebo_ros) and spawn the TurtleBot3 into it.
+"""Start Gazebo (Classic, via gazebo_ros) with a world and spawn the TurtleBot3 into it.
 
 The robot's URDF is published by robot_state_publisher (for TF); the robot itself is spawned
-into Gazebo from turtlebot3_gazebo's model.sdf, which has the sensor and drive plugins. gui:=false runs gzserver only (no gzclient window),
-which is much lighter under software rendering; use RViz to watch instead.
+into Gazebo from turtlebot3_gazebo's model.sdf, which has the sensor and drive plugins.
+The world defaults to the SC7a clutter field (world:=<file> to use another).
+gui:=false runs gzserver only (no gzclient window), which is much lighter under software
+rendering; use RViz to watch instead.
 """
 import os
 
@@ -20,16 +22,21 @@ def generate_launch_description():
     urdf_path = os.path.join(
         get_package_share_directory('turtlebot3_description'), 'urdf', f'turtlebot3_{model}.urdf')
     with open(urdf_path, 'r') as f:
-        robot_description = f.read()
+        robot_description = f.read().replace('${namespace}', '')  # stock URDF placeholder, no namespace here
+
+    world = os.path.join(get_package_share_directory('tb3_bot'), 'models', 'SC7a_clutter_field_low.sdf')
 
     return LaunchDescription([
         DeclareLaunchArgument('gui', default_value='true',
                               description='false = gzserver only, no gzclient window'),
+        DeclareLaunchArgument('world', default_value=world,
+                              description='world file to load (default: the SC7a clutter field)'),
         SetEnvironmentVariable('GAZEBO_MODEL_PATH', os.path.join(tb3_gazebo_share, 'models')),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')),
-            launch_arguments={'gui': LaunchConfiguration('gui')}.items(),
+            launch_arguments={'gui': LaunchConfiguration('gui'),
+                              'world': LaunchConfiguration('world')}.items(),
         ),
         Node(
             package='robot_state_publisher',

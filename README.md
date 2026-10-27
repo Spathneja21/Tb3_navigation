@@ -152,7 +152,12 @@ source /ros2_ws/install/setup.bash
 rviz2
 ```
 In RViz: **Add → RobotModel** and set its **Description Topic** to `/robot_description`;
-**Add → TF** to see the frames; choose the robot's root frame as the **Fixed Frame**.
+**Add → TF** to see the frames; set the **Fixed Frame** to `base_footprint`, the robot's root frame.
+
+The launch files remove a `${namespace}` placeholder that the stock Humble URDF has in every
+link name (ROBOTIS's launch files substitute it). Without that, the frames are literally
+named `${namespace}base_scan` and so on, and nothing that uses the plain names (the scan,
+RViz) can find them.
 
 ## Gazebo: spawn the robot
 
@@ -169,6 +174,8 @@ source /opt/ros/humble/setup.bash
 source /ros2_ws/install/setup.bash
 ros2 launch tb3_bot gazebo.launch.py gui:=false     # or gui:=true for the Gazebo window
 ```
+By default it loads the SC7a clutter field (see "World" above) and spawns the robot at the
+origin. `world:=<file>` loads another world.
 `gui:=false` runs the simulation without its window, which is much lighter under software
 rendering. Check what the simulation publishes from a second shell (both setup files sourced):
 ```bash

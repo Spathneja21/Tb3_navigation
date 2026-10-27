@@ -101,6 +101,10 @@ its TF tree, so the model can be checked in RViz before anything simulates it.
 - The URDF stays in the TurtleBot3 apt package and is read from there; it is not copied into this
   repo.
 - Removed `launch/.gitkeep`, since the folder now has a real file.
+- The URDF is passed through unchanged in this first version. That turned out to be a mistake: the
+  stock Humble URDF has a literal `${namespace}` in every link name. It only became visible once
+  Gazebo was publishing scans, so it is written up under Step 5 ("Mistake: the `${namespace}`
+  placeholder").
 - Run it (container, workspace sourced, after a rebuild because launch files are installed copies):
   `ros2 launch tb3_bot rsp.launch.py`, then `rviz2` with a RobotModel display (Description Topic
   `/robot_description`) and a TF display.
@@ -142,3 +146,56 @@ Second layer of the bring-up: put the robot into a running Gazebo.
   `robot_state_publisher`. The ROBOTIS launch files do the same.
 - Added with the fix: `GAZEBO_MODEL_PATH` set to `turtlebot3_gazebo/models`, because the SDF loads
   its meshes from `model://turtlebot3_common/...`.
+
+### Mistake: the `${namespace}` placeholder in the URDF (found in RViz while running Gazebo)
+
+- Symptom: with `/scan` and `/odom` publishing, RViz printed
+  `Message Filter dropping message: frame 'base_scan' ... because the queue is full`, repeating,
+  and the RobotModel display showed no robot.
+- Cause: the stock Humble TurtleBot3 URDF contains a literal `${namespace}` in every link name, and
+  ROBOTIS's launch files substitute it before use. `rsp.launch.py` and `gazebo.launch.py` passed the
+  text through unchanged, so `robot_state_publisher` published frames named
+  `${namespace}base_footprint`, `${namespace}base_scan`, and so on (`got segment ${namespace}...`
+  in its log). The scan messages from Gazebo use the plain name `base_scan`, so RViz could never
+  find a transform for them, and RobotModel's links had no transform either.
+- Fix: `f.read().replace('${namespace}', '')` in both launch files. The frames are now
+  `base_footprint`, `base_link`, `base_scan`, and so on, and `odom -> base_footprint` comes from
+  the Gazebo diff-drive plugin.
+- It was first made in Step 4 and only showed once Gazebo published scans in the plain frame
+  names. Checking `ros2 run tf2_ros tf2_echo odom base_scan` would also have shown it.
+
+## Step 6. Launch the clutter-field world with the robot
+
+- `gazebo.launch.py` gets a `world` launch argument, passed through to `gazebo_ros`'s launch. Its default
+  is `<tb3_bot share>/models/SC7a_clutter_field_low.sdf`, the arena copied in Step 3, so
+  `ros2 launch tb3_bot gazebo.launch.py gui:=false` now loads the arena and spawns the Burger at (0, 0),
+  the clear spot at the arena's origin.
+- First version, deliberately plain: the original SDF file is used as it is, and `CMakeLists.txt` is not
+  touched. (`models/` was left out of the install on purpose in Step 3; the world file therefore
+  isn't in the installed package yet.)
+
+### Mistake: the world file wasn't installed, and Gazebo silently started an empty world
+
+- Symptom: `gazebo.launch.py` ran cleanly (robot spawned, `/scan` and `/odom` published, no errors in
+  the launch log; the only "errors" were the harmless ALSA sound-card lines), but every one of the
+  360 scan beams read `inf`. With the robot at the origin, the arena's nearest blocks are about 2.5-2.8 m
+  away (`block_033`, `block_001`, `block_008`), inside the lidar's 3.5 m range, so some beams should have
+  hit something. The robot was alone in an empty world.
+- Diagnosis, with three commands in the container:
+  - `ps -eo args | grep [g]zserver` showed
+    `gzserver /ros2_ws/install/tb3_bot/share/tb3_bot/models/SC7a_clutter_field_low.sdf ...`, so the launch
+    file did pass the right path.
+  - `grep -n world .../install/tb3_bot/share/tb3_bot/launch/gazebo.launch.py` showed the new `world`
+    argument, so the installed launch file was current.
+  - `ls /ros2_ws/install/tb3_bot/share/tb3_bot/models` -> `No such file or directory`.
+- Cause: `CMakeLists.txt` installed only `launch` and `config`. Everything the launch files read at
+  run time comes from the installed share directory, not from `src/`, so the world file didn't exist
+  where the launch file pointed. Gazebo Classic started an empty world instead of failing, with no message.
+- Fix: `install(DIRECTORY launch config models DESTINATION share/${PROJECT_NAME})`.
+- Result: after `colcon build --packages-select tb3_bot` (which now installs `models/`) and a relaunch,
+  the world loads and the robot runs inside the arena (reported as working). The launch output
+  after the rebuild was not captured here, so whether Gazebo Classic printed any warnings about the
+  Harmonic-format file (SDF 1.9, `gz-sim-*` plugins) is not recorded; the Step 3 note that the world
+  might need converting stays open until that's checked.
+- Lesson: an all-`inf` scan is not "nothing wrong". Checking what `gzserver` was started with
+  (`ps`) and whether that path exists beat reading logs that had nothing in them.

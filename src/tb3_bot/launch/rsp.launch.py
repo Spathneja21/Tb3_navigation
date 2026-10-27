@@ -15,7 +15,7 @@ def generate_launch_description():
     urdf_path = os.path.join(
         get_package_share_directory('turtlebot3_description'), 'urdf', f'turtlebot3_{model}.urdf')
     with open(urdf_path, 'r') as f:
-        robot_description = f.read()
+        robot_description = f.read().replace('${namespace}', '')  # stock URDF placeholder, no namespace here
 
     return LaunchDescription([
         Node(

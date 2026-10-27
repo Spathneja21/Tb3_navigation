@@ -8,6 +8,6 @@ endif()
 find_package(ament_cmake REQUIRED)
 
 # launch files and configs are installed copies: rebuild after editing them
-install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY launch config models DESTINATION share/${PROJECT_NAME})
 
 ament_package()
