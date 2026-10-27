@@ -182,3 +182,35 @@ rendering. Check what the simulation publishes from a second shell (both setup f
 ros2 topic list
 ros2 node list
 ```
+
+### Watch it in the Gazebo window, and drive it
+
+With the window on (`gui:=true`, the default) you see the arena and the robot at its origin:
+```bash
+ros2 launch tb3_bot gazebo.launch.py gui:=true
+```
+`LIBGL_ALWAYS_SOFTWARE=1` means Gazebo renders on the CPU, so the window can take a minute
+to appear and then runs slowly. Give it time before concluding it is stuck.
+
+To check the robot responds, drive it from a second shell (both setup files sourced):
+```bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard
+```
+Click that terminal and use `i` (forward), `j`/`l` (turn), `k` (stop). The robot should move in
+the Gazebo window, and the wheel-odometry topic should change:
+```bash
+ros2 topic echo /odom --once --field pose.pose.position
+```
+
+## Mapping with slam_toolbox
+
+`config/slam_toolbox.yaml` configures `async_slam_toolbox_node` (mapping mode) for the Burger:
+frames `odom`, `map`, `base_footprint`, scan topic `/scan`. With Gazebo running, start it and the
+explorer in two more shells (both setup files sourced in each):
+```bash
+ros2 run slam_toolbox async_slam_toolbox_node --ros-args --params-file /ros2_ws/src/tb3_bot/config/slam_toolbox.yaml
+ros2 run tb3_bot lidar_explorer --ros-args -p use_sim_time:=true
+```
+In RViz, set the Fixed Frame to `map`, add a **Map** display on `/map` and set its Durability
+Policy to Transient Local. `config/nav2_params.yaml` is for the Nav2 step later.
+

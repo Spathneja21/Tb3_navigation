@@ -9,6 +9,13 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <!-- lidar_explorer.cpp -->
+  <depend>rclcpp</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf2_ros</depend>
+
   <!-- stock TurtleBot3 description and Gazebo models/plugins -->
   <exec_depend>turtlebot3_description</exec_depend>
   <exec_depend>turtlebot3_gazebo</exec_depend>

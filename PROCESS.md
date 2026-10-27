@@ -199,3 +199,78 @@ Second layer of the bring-up: put the robot into a running Gazebo.
   might need converting stays open until that's checked.
 - Lesson: an all-`inf` scan is not "nothing wrong". Checking what `gzserver` was started with
   (`ps`) and whether that path exists beat reading logs that had nothing in them.
+
+## Step 7. View the robot in the Gazebo window and drive it
+
+- No code change: `gazebo.launch.py gui:=true` (the default) starts `gzclient` along with `gzserver`.
+  The question for this step is whether the window works under software rendering
+  (`LIBGL_ALWAYS_SOFTWARE=1`, no GPU in the container), which was a problem with the office mesh
+  in the earlier project. This world has no meshes or textures, only box primitives.
+- Driving: `ros2 run teleop_twist_keyboard teleop_twist_keyboard` publishes `/cmd_vel`, which the
+  Burger's diff-drive plugin subscribes to; the robot should move, and `/odom` should change.
+- README: added "Watch it in the Gazebo window, and drive it".
+- Outcome: to be recorded.
+
+## Step 8. Add the autonomous explorer (`lidar_explorer.cpp`)
+
+Copied `lidar_explorer.cpp` from the earlier `tb3_nav2_demo` project into `src/tb3_bot/src/`
+(identical, 429 lines), instead of driving the robot by hand with teleop. Removed
+`src/.gitkeep`, since the folder has a real file.
+
+What it does (it is C++, using `rclcpp`, `tf2_ros` and the `sensor_msgs`/`nav_msgs`/`geometry_msgs`
+types):
+- Local layer, on every `/scan`: finds gaps in the lidar scan and steers into the one closest to its
+  waypoint, publishing `/cmd_vel`. It slows near obstacles and escapes by reversing and rotating
+  if stuck.
+- Global layer, once a second, on `/map`: picks the nearest reachable frontier (a free cell next to
+  unknown space) on the SLAM map and sets the waypoint toward it. It needs `/map` and a
+  `map -> base_link` transform, so this half only works once `slam_toolbox` is running.
+- Without a map it falls back to going toward the widest, deepest gap in the scan.
+- It also publishes the travelled path (`/explorer_path`) and the current waypoint (`/explorer_goal`).
+
+This copy is the version from `tb3_nav2_demo`, not the original `amr_bot` one. It differs by one change
+(lines 302-308): it normalises scan angles to -pi..pi and rotates the arrays, because the TurtleBot3's
+LDS reports angles 0..2pi (index 0 straight ahead) while the original code assumes -pi..pi.
+Without that, a beam slightly to the right (about 6.0 rad) reads as a hard left.
+
+Not done yet in this step: nothing builds it. `CMakeLists.txt` has no `add_executable` for it and
+`package.xml` doesn't list `rclcpp`, `tf2_ros` or the message packages.
+
+### Mistake: the explorer was never built (`No executable found`)
+
+- Symptom: `colcon build --packages-select tb3_bot` finished in 0.07 s with `1 package finished`, and
+  `ros2 run tb3_bot lidar_explorer` printed `No executable found`.
+- Cause: a `.cpp` file in `src/` is not compiled just by being there. `CMakeLists.txt` had no
+  `add_executable` for it, so `colcon` had nothing to compile, and without an `install(TARGETS ...)`
+  the binary wouldn't reach `lib/tb3_bot/`, where `ros2 run` looks. The 0.07 s build time was the clue:
+  nothing was being compiled.
+- Fix, in `CMakeLists.txt`: `find_package` for `rclcpp`, `geometry_msgs`, `sensor_msgs`,
+  `nav_msgs`, `tf2_ros`; `add_executable(lidar_explorer src/lidar_explorer.cpp)`;
+  `ament_target_dependencies(...)` with the same packages; `install(TARGETS lidar_explorer
+  DESTINATION lib/${PROJECT_NAME})`. In `package.xml`: matching `<depend>` entries, so tools like
+  `rosdep` know what the package needs.
+
+## Step 9. SLAM and Nav2 configuration
+
+Symptom that led here: with `lidar_explorer` running, RViz showed only the explorer's looping path
+and scan points, no map. Nothing was building one: `slam_toolbox` hadn't been started or configured
+in this project, so there was no `/map`, and the explorer was in its no-map fallback (head for the
+widest gap), which wanders.
+
+Copied from the earlier `tb3_nav2_demo` project into `src/tb3_bot/config/`:
+- `slam_toolbox.yaml`: `async_slam_toolbox_node` in mapping mode. Frames `odom`, `map`,
+  `base_footprint`; reads `/scan` and `/odom`; `use_sim_time: true`.
+- `nav2_params.yaml`: the full Nav2 parameter set (AMCL, planner, controller, costmaps,
+  behaviours), based on the earlier AMR project's config with the TurtleBot3 adaptations:
+  `base_footprint` everywhere, `robot_radius: 0.11` and `inflation_radius: 0.25` for the Burger.
+  Not used until Nav2 is launched on a saved map.
+- Removed `config/.gitkeep`.
+
+One change on the way in: the old `slam_toolbox.yaml` read `scan_topic: /scan_slam` with
+`max_laser_range: 3.0`. Those depend on `scan_filler`, a node this project doesn't have yet, so with
+them SLAM would wait forever for a topic nobody publishes. For now they are `scan_topic: /scan` and
+`max_laser_range: 3.5` (the Burger lidar's real range). When `scan_filler` is added they change
+back, with the reason.
+
+The config files are read straight from `src/` by the commands below, so no rebuild is needed for
+them (they are also installed by `CMakeLists.txt`, as copies).

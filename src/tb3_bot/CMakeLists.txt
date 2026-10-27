@@ -6,6 +6,16 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
+
+# Frontier explorer: reads /scan, /odom, /map and the map->base_link TF, drives /cmd_vel.
+add_executable(lidar_explorer src/lidar_explorer.cpp)
+ament_target_dependencies(lidar_explorer rclcpp sensor_msgs geometry_msgs nav_msgs tf2_ros)
+install(TARGETS lidar_explorer DESTINATION lib/${PROJECT_NAME})
 
 # launch files and configs are installed copies: rebuild after editing them
 install(DIRECTORY launch config models DESTINATION share/${PROJECT_NAME})
