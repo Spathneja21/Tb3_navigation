@@ -17,4 +17,13 @@ Burger robot, ROS 2 Humble in Docker (host Ubuntu 20.04 is too old for Humble).
 - `.gitignore`: ignores the colcon outputs (`build/`, `install/`, `log/`) and Python caches.
   This file is committed, and `PROCESS.md` is committed too, since it is part of the
   submission.
-- Dockerfile, container and the package skeleton come in the next steps.
+- `Dockerfile`, on top of the existing `supermarketbot:humble` image (ROS 2 Humble, Nav2,
+  slam_toolbox, RViz). It adds `turtlebot3_description`, `turtlebot3_gazebo` (Gazebo Classic
+  models and plugins) and `joint_state_publisher`, and sets `TURTLEBOT3_MODEL=burger` so it
+  doesn't have to be exported in every shell.
+- `ENTRYPOINT []`: the base image's entrypoint sources `/ros2_ws/install/setup.bash`, which
+  doesn't exist on a fresh mount, so the container would exit immediately. Each shell sources
+  `/opt/ros/humble/setup.bash` and the workspace by hand instead.
+- `README.md`: setup instructions for the image and the container (flags explained). It will
+  grow with each step.
+- The package skeleton comes in the next step.
