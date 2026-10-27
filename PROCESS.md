@@ -274,3 +274,40 @@ back, with the reason.
 
 The config files are read straight from `src/` by the commands below, so no rebuild is needed for
 them (they are also installed by `CMakeLists.txt`, as copies).
+
+## Step 10. Explorer tuning and `scan_filler`
+
+Two additions from the earlier project, added to deal with the map looking bad in this arena. The
+map after a few minutes showed only the left and bottom walls as occupied cells, wedges of free
+space along the beams that hit them, dark gaps between the wedges (some right next to the robot),
+none of the 45 blocks, and the explorer's path scribbling in the middle.
+
+Why it happens here: the Burger's lidar reaches 3.5 m, the arena is 30 × 30 m, and the blocks are
+about 3-4 m apart, so most beams hit nothing and return `inf`. That causes two problems:
+- With so few features in range, SLAM has little to lock onto.
+- `slam_toolbox` (Karto) ignores readings at or beyond the sensor's `range_max`, so a beam that hits
+  nothing marks no free space either. Unknown patches stay unknown even beside the robot, and the
+  explorer treats them as frontiers and keeps hopping between them.
+
+- `config/lidar_explorer.yaml` (explorer parameters for the Burger; the defaults in the `.cpp` were
+  tuned for a faster, longer-range lidar): `obstacle_dist` 0.7, `kp_heading` 1.0, `w_max` 0.6,
+  `v_max` 0.18, `waypoint_lookahead` 1.5, `min_frontier_cells` 20, `robot_radius` 0.11. Passed with
+  `--params-file`, and read only at startup.
+- `src/scan_filler.cpp`: republishes `/scan` as `/scan_slam` with every no-return beam (`inf`, NaN or
+  at/above `range_max`) set to `range_max - 0.01`. `slam_toolbox.yaml` now reads `/scan_slam` and
+  `max_laser_range` is 3.0, so those filled beams count as "free out to 3.0 m, no wall at the end".
+  The Nav2 costmaps, RViz and `lidar_explorer` keep using the raw `/scan`.
+
+### The same mistake again: `scan_filler` had no build rule
+
+`src/scan_filler.cpp` was added, but `CMakeLists.txt` had no `add_executable` for it, which is the
+`No executable found` mistake from Step 8. Added `add_executable(scan_filler ...)`,
+`ament_target_dependencies(scan_filler rclcpp sensor_msgs)` and `install(TARGETS ...)`.
+
+### Where the lidar range lives (it is not in the world file)
+
+The range is a property of the robot, not the world: it's in the Burger's own model,
+`turtlebot3_gazebo/models/turtlebot3_burger/model.sdf` inside the Docker image, in the lidar's ray
+sensor. What the running simulation reports on `/scan` matches: 360 samples, `range_max` 3.5 m, 5 Hz.
+Raising it would mean editing a copy of that model, which makes the robot something other than the
+stock Burger, so it is kept as a later option.

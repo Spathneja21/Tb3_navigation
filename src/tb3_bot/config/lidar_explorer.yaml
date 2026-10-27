@@ -1,0 +1,12 @@
+# lidar_explorer tuned for the TurtleBot3 Burger (defaults in the .cpp are amr_bot's).
+# Read once at startup: restart the node after editing.
+lidar_explorer:
+  ros__parameters:
+    use_sim_time: true
+    robot_radius: 0.11        # Burger footprint (amr_bot: 0.15)
+    obstacle_dist: 0.7        # walls react only inside this; 1.0 made it weave in ~2.6 m corridors
+    kp_heading: 1.0           # 1.5 overshoots with the LDS's 5 Hz scans (= 5 Hz control loop)
+    w_max: 0.6
+    v_max: 0.18               # Burger tops out at 0.22
+    waypoint_lookahead: 1.5   # farther waypoint -> steadier bearing between 1 Hz replans
+    min_frontier_cells: 20    # ignore small unknown patches from beam gaps at 3.5 m range
