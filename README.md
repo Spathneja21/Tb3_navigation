@@ -28,18 +28,21 @@ xhost +local:docker
 docker run -it --name tb3assign --net=host \
   -e DISPLAY=$DISPLAY -e LIBGL_ALWAYS_SOFTWARE=1 \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
-  -v ~/projects/tb3_assignment:/demo \
+  -v ~/projects/tb3_assignment:/ros2_ws \
   tb3assign:humble
 ```
 - `--net=host`: ROS 2 discovery is multicast-based, and bridged networks break it. Stop any
   other ROS container first, since both would share one ROS domain.
+- `-v ~/projects/tb3_assignment:/ros2_ws`: the project is the colcon workspace, mounted at
+  `/ros2_ws` (the path the build commands below use). Mounts can't be changed on an
+  existing container; remove it with `docker rm -f tb3assign` and run again.
 - `LIBGL_ALWAYS_SOFTWARE=1`: there is no GPU passthrough, so Gazebo and RViz render on the CPU.
 - `xhost +local:docker` lets the container draw on your display. It doesn't survive a new
   login, so run it again if a window fails with `No protocol specified`.
 
 Later sessions:
 ```bash
-docker start -ai tb3assign       # resume the container
+docker start -ai tb3assign       # to start the container
 docker exec -it tb3assign bash   # extra shell in the running container
 ```
 
@@ -47,3 +50,12 @@ Every shell starts with:
 ```bash
 source /opt/ros/humble/setup.bash
 ```
+
+### 3. Build the package
+
+```bash
+cd /ros2_ws
+colcon build --packages-select tb3_bot
+```
+(`--packages-select`, not `--package-select`.) Launch files and configs are installed
+copies, so rebuild after editing them.

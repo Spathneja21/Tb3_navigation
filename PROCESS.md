@@ -26,4 +26,31 @@ Burger robot, ROS 2 Humble in Docker (host Ubuntu 20.04 is too old for Humble).
   `/opt/ros/humble/setup.bash` and the workspace by hand instead.
 - `README.md`: setup instructions for the image and the container (flags explained). It will
   grow with each step.
-- The package skeleton comes in the next step.
+
+## Step 2. The `tb3_bot` package
+
+Same layout as the AMR project: a colcon workspace with `src/<package>/`, and inside the
+package `src/ launch/ config/ scripts/ maps/` (empty folders hold a `.gitkeep`, since git
+doesn't track empty directories).
+
+- `package.xml`: ament_cmake package. Only run-time dependencies for now: the TurtleBot3
+  description and Gazebo packages, `robot_state_publisher`, `joint_state_publisher`,
+  `gazebo_ros`. The C++ dependencies (`rclcpp`, `sensor_msgs`, ...) come with the first C++
+  node.
+- `CMakeLists.txt`: no executables yet. It installs `launch/` and `config/` into the package
+  share directory. **Those are copies**, so after editing a launch file or config the package
+  needs a rebuild (or `--symlink-install`) before `ros2 launch` sees the change.
+
+### Mistake: the container mounted the project at `/demo`
+
+- The container had been started with `-v ~/projects/tb3_assignment:/demo`.
+- `cd /ros2_ws && colcon build --packages-select tb3_bot` printed
+  `WARNING: ignoring unknown package 'tb3_bot' in --packages-select` and
+  `Summary: 0 packages finished`.
+- Why: `/ros2_ws` is an empty folder that exists in the base image, and the project was
+  mounted somewhere else (`/demo`), so `colcon` found nothing to build.
+  `ls /demo/src` shows `tb3_bot`; `ls /ros2_ws` doesn't.
+- Fix: a container's mounts are fixed when it is created, so it can't be edited in place.
+  `docker rm -f tb3assign`, then `docker run` again with `-v ~/projects/tb3_assignment:/ros2_ws`.
+  The files live on the host, so nothing is lost. The README's `docker run` command was
+  corrected to match.

@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>tb3_bot</name>
+  <version>0.0.0</version>
+  <description>TurtleBot3 autonomous exploration and Nav2 navigation in Gazebo</description>
+  <maintainer email="shubhampathneja123@gmail.com">shubham</maintainer>
+  <license>TODO: License declaration</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- stock TurtleBot3 description and Gazebo models/plugins -->
+  <exec_depend>turtlebot3_description</exec_depend>
+  <exec_depend>turtlebot3_gazebo</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>joint_state_publisher</exec_depend>
+  <exec_depend>gazebo_ros</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
