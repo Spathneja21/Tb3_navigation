@@ -46,16 +46,72 @@ docker start -ai tb3assign       # to start the container
 docker exec -it tb3assign bash   # extra shell in the running container
 ```
 
-Every shell starts with:
-```bash
-source /opt/ros/humble/setup.bash
-```
-
 ### 3. Build the package
 
 ```bash
 cd /ros2_ws
+source /opt/ros/humble/setup.bash
 colcon build --packages-select tb3_bot
 ```
 (`--packages-select`, not `--package-select`.) Launch files and configs are installed
 copies, so rebuild after editing them.
+
+### Every shell
+
+Every new shell (each `docker exec`, and any shell open during a build) needs both lines,
+ROS first and then the workspace, before any `ros2` command:
+```bash
+source /opt/ros/humble/setup.bash
+source /ros2_ws/install/setup.bash
+```
+Without the second line ROS doesn't know about `tb3_bot`: `ros2 pkg prefix tb3_bot` prints
+`Package 'tb3_bot' not found`. After a rebuild, shells that are already open pick up the
+changes only if they source it again.
+
+## World: SC7a clutter field
+
+The robot runs in `src/tb3_bot/models/SC7a_clutter_field_low.sdf`. It is an SDF **world**
+(the arena, with no robot in it), not a URDF. The robot's own description comes from the
+TurtleBot3 packages.
+
+![Overview render of the SC7a clutter field: a walled 30 × 30 m arena with 45 scattered blocks](src/tb3_bot/models/render_overview.png)
+
+*Overview render of the world (`src/tb3_bot/models/render_overview.png`): the walled arena
+with the 45 blocks.*
+
+### Source
+
+- Collection: [`mertgulerx/world-collection`](https://github.com/mertgulerx/world-collection),
+  42 Gazebo worlds for testing robot exploration, navigation and SLAM, built for the
+  exploration benchmark of the author's `frontier_exploration_ros2`.
+- Announcement:
+  [42 Gazebo Harmonic simulation worlds for navigation, exploration and SLAM workflows](https://discourse.openrobotics.org/t/42-gazebo-harmonic-simulation-worlds-for-navigation-exploration-and-slam-workflows/58934)
+  (Open Robotics Discourse).
+- Licence: Apache-2.0, as stated in the collection's README. The collection also has a
+  `CITATION.cff` file with citation details.
+- In the collection's naming, **SC** worlds are the single-challenge ones, each targeting one
+  difficulty. SC7a is the "clutter field": blocks that hide each other, with SC7b the denser
+  version of the same field.
+
+### What the world contains
+
+| Property | Value |
+|---|---|
+| World name | `sc7a_clutter_field_low` |
+| Arena | 30 × 30 m floor, four 2 m tall outer walls |
+| Obstacles | 45 static blocks, 1.2 m tall, 0.5–2.0 m wide |
+| Minimum gap | 1.0 m between blocks, and 1.0 m between a block and a wall |
+| Spawn area | nothing within 1.5 m of the origin, so the robot can start at (0, 0) |
+| Geometry | plain boxes only (50 collision elements: ground, 4 walls, 45 blocks), no meshes |
+| Generation | `worldgen` 1.0.1, seed 7100, from the file's own header |
+| Physics | ODE, 0.01 s step, 200 Hz |
+
+World and map coordinates coincide, because the spawn point is the world's origin.
+
+### Gazebo version
+
+The file targets **Gazebo Harmonic** (SDF 1.9, `gz-sim-*-system` plugins). This project uses
+**Gazebo Classic** (ROS 2 Humble with `gazebo_ros`), which is a different simulator. The file
+is therefore kept unchanged here as the original, and a Classic-compatible copy is made
+when the world is first launched (see `PROCESS.md`). Any modified copy will say so, as the
+Apache-2.0 licence requires.

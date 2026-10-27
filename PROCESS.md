@@ -47,10 +47,44 @@ doesn't track empty directories).
 - `cd /ros2_ws && colcon build --packages-select tb3_bot` printed
   `WARNING: ignoring unknown package 'tb3_bot' in --packages-select` and
   `Summary: 0 packages finished`.
-- Why: `/ros2_ws` is an empty folder that exists in the base image, and the project was
-  mounted somewhere else (`/demo`), so `colcon` found nothing to build.
-  `ls /demo/src` shows `tb3_bot`; `ls /ros2_ws` doesn't.
+- Why: `/ros2_ws` already exists in the base image as the reference project's own workspace
+  (`ls /ros2_ws` showed `build install log src`, none of it ours). The project was mounted
+  somewhere else (`/demo`), so `colcon` looked in that workspace and didn't find `tb3_bot`.
+  `ls /demo` shows our `Dockerfile README.md PROCESS.md src`.
+- The first fix attempt failed too: the `docker rm -f` / `docker run` commands were typed
+  inside the container, where `docker` doesn't exist (`bash: docker: command not found`).
+  They have to run on the host.
 - Fix: a container's mounts are fixed when it is created, so it can't be edited in place.
   `docker rm -f tb3assign`, then `docker run` again with `-v ~/projects/tb3_assignment:/ros2_ws`.
   The files live on the host, so nothing is lost. The README's `docker run` command was
   corrected to match.
+
+
+### The mount fix took three attempts
+
+- The first `docker rm -f` was typed inside the container (`docker: command not found`).
+- A second run of the checks showed the mount list still had only
+  `.../tb3_assignment -> /demo` and `colcon list` found only the base image's
+  `supermarketbot` package: the old container was still the one in use.
+- Telling the shells apart: the container prompt is `root@...:/ros2_ws#`, the host prompt is
+  `(base) shubham@...:~$`. After `exit`, `docker rm -f tb3assign` and a new `docker run` on the
+  host, `ls /ros2_ws/src` showed `tb3_bot` and `colcon build --packages-select tb3_bot`
+  succeeded.
+
+## Step 3. The clutter-field world
+
+Copied `SC7a_clutter_field_low.sdf` into `src/tb3_bot/models/`, unchanged (byte-identical to the
+original).
+
+What it is (from its own header and contents):
+- World `sc7a_clutter_field_low`: a 30 × 30 m arena with four 2 m tall outer walls and 45
+  static boxes, 1.2 m tall and 0.5–2.0 m wide. 50 `<collision>` elements in total (ground, 4
+  walls, 45 blocks); every one is a plain box (no meshes). Generated with seed 7100, at least 1.0 m between blocks,
+  and nothing within 1.5 m of the origin, so the robot can spawn at (0, 0), where world and map
+  coordinates will coincide.
+- It is written for **Gazebo Harmonic** (gz-sim 8, SDF 1.9, `gz-sim-*-system` plugins). The rest
+  of this project uses Gazebo Classic (Humble's `gazebo_ros`, the TurtleBot3 `model.sdf` with
+  `libgazebo_ros_*` plugins), so it is not expected to load there as-is. It stays unconverted in
+  this commit; the Classic-compatible copy comes when the world is first launched.
+- `CMakeLists.txt` doesn't install `models/` yet.
+
