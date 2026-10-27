@@ -153,3 +153,23 @@ rviz2
 ```
 In RViz: **Add → RobotModel** and set its **Description Topic** to `/robot_description`;
 **Add → TF** to see the frames; choose the robot's root frame as the **Fixed Frame**.
+
+## Gazebo: spawn the robot
+
+`launch/gazebo.launch.py` starts Gazebo Classic with an empty world, publishes the robot's TF
+and spawns the TurtleBot3 at the origin. Stop the `rsp.launch.py` shell first: it publishes
+the same robot, and only one of the two should run.
+
+```bash
+cd /ros2_ws
+colcon build --packages-select tb3_bot
+source /opt/ros/humble/setup.bash
+source /ros2_ws/install/setup.bash
+ros2 launch tb3_bot gazebo.launch.py gui:=false     # or gui:=true for the Gazebo window
+```
+`gui:=false` runs the simulation without its window, which is much lighter under software
+rendering. Check what the simulation publishes from a second shell (both setup files sourced):
+```bash
+ros2 topic list
+ros2 node list
+```

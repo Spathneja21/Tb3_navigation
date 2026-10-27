@@ -109,3 +109,20 @@ its TF tree, so the model can be checked in RViz before anything simulates it.
   `rsp.launch.py` in one shell, `rviz2` in another, both shells sourced) and an RViz screenshot,
   `models/robot_model.png` (479 × 419, about 33 KB; shows the Burger's wheels, stacked plates and
   lidar).
+
+## Step 5. Start Gazebo and spawn the robot (`gazebo.launch.py`)
+
+Second layer of the bring-up: put the robot into a running Gazebo.
+
+- `launch/gazebo.launch.py` includes `gazebo_ros`'s own `gazebo.launch.py` (Gazebo Classic: `gzserver`
+  plus `gzclient`, with the ROS factory plugin that provides `/spawn_entity`), starts
+  `robot_state_publisher` on sim time, and runs `spawn_entity.py -topic robot_description` to
+  create the robot at (0, 0, 0.01).
+- `gui` launch argument (default `true`): `gui:=false` runs `gzserver` only. Under software
+  rendering (`LIBGL_ALWAYS_SOFTWARE=1`) the Gazebo window is slow, and RViz can show everything
+  the simulation publishes.
+- It starts in Gazebo's default empty world. The clutter-field world is loaded in a later step,
+  so that a world problem and a robot problem can't be confused.
+- The robot is spawned from the same URDF `rsp.launch.py` reads (through the
+  `/robot_description` topic that `robot_state_publisher` publishes).
+- Run: `ros2 launch tb3_bot gazebo.launch.py` (or `gui:=false`), after a rebuild.
