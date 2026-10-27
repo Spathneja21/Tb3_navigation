@@ -115,3 +115,41 @@ The file targets **Gazebo Harmonic** (SDF 1.9, `gz-sim-*-system` plugins). This 
 is therefore kept unchanged here as the original, and a Classic-compatible copy is made
 when the world is first launched (see `PROCESS.md`). Any modified copy will say so, as the
 Apache-2.0 licence requires.
+
+## Robot model: TurtleBot3 Burger
+
+![The TurtleBot3 Burger URDF shown in RViz's RobotModel display](src/tb3_bot/models/robot_model.png)
+
+*The Burger in RViz: two drive wheels, the stacked plates and the lidar on top
+(`src/tb3_bot/models/robot_model.png`).*
+
+The robot description is the stock one from the `turtlebot3_description` package (installed
+in the image), read at launch time rather than copied into this repository. The
+`TURTLEBOT3_MODEL` environment variable picks the model, and the Dockerfile sets it to `burger`.
+
+`launch/rsp.launch.py` publishes the robot's TF tree from that URDF with no simulator running, so
+the model can be checked in RViz first.
+
+### View it in RViz
+
+Rebuild first if you edited a launch file (launch files are installed copies):
+```bash
+cd /ros2_ws
+colcon build --packages-select tb3_bot
+```
+
+Shell 1, publish the robot description and TF:
+```bash
+source /opt/ros/humble/setup.bash
+source /ros2_ws/install/setup.bash
+ros2 launch tb3_bot rsp.launch.py
+```
+
+Shell 2 (`docker exec -it tb3assign bash`), open RViz:
+```bash
+source /opt/ros/humble/setup.bash
+source /ros2_ws/install/setup.bash
+rviz2
+```
+In RViz: **Add → RobotModel** and set its **Description Topic** to `/robot_description`;
+**Add → TF** to see the frames; choose the robot's root frame as the **Fixed Frame**.

@@ -88,3 +88,24 @@ What it is (from its own header and contents):
   this commit; the Classic-compatible copy comes when the world is first launched.
 - `CMakeLists.txt` doesn't install `models/` yet.
 
+
+## Step 4. Import the robot URDF (`rsp.launch.py`)
+
+First layer of the bring-up, with no Gazebo: load the stock TurtleBot3 Burger URDF and publish
+its TF tree, so the model can be checked in RViz before anything simulates it.
+
+- `launch/rsp.launch.py` reads `turtlebot3_description/urdf/turtlebot3_<model>.urdf` (the model
+  comes from `TURTLEBOT3_MODEL`, which the Dockerfile sets to `burger`) and hands the text to
+  `robot_state_publisher` as the `robot_description` parameter. `joint_state_publisher` publishes
+  zero joint states, so the wheels have something to render with no simulator running.
+- The URDF stays in the TurtleBot3 apt package and is read from there; it is not copied into this
+  repo.
+- Removed `launch/.gitkeep`, since the folder now has a real file.
+- Run it (container, workspace sourced, after a rebuild because launch files are installed copies):
+  `ros2 launch tb3_bot rsp.launch.py`, then `rviz2` with a RobotModel display (Description Topic
+  `/robot_description`) and a TF display.
+
+- README: added a "Robot model: TurtleBot3 Burger" section with the exact commands (rebuild, launch
+  `rsp.launch.py` in one shell, `rviz2` in another, both shells sourced) and an RViz screenshot,
+  `models/robot_model.png` (479 × 419, about 33 KB; shows the Burger's wheels, stacked plates and
+  lidar).
